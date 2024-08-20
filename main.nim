@@ -1,4 +1,4 @@
-import os, winlean, times, system, strutils, osproc, math
+import os, winlean, times, system, strutils, osproc, math, re
 
 # Windows API to detect key pressed
 proc GetAsyncKeyState(vKey: int32): int32 {.stdcall, importc: "GetAsyncKeyState", dynlib: "user32.dll".}
@@ -11,8 +11,10 @@ const
   VK_RSHIFT = 0xA1 # Right Shift key
   VK_T      = 0x54 # 'T' key
 
-# Root directory of temporary folders
-const ROOT_FOLDER = "C://TempFolders//"
+# Constants for the application
+const
+  ROOT_FOLDER = "C:\\TempFolders\\"
+  DELETION_TIME = 24*3600
 
 # Method to check whether a key is pressed
 proc isPressed(vKey: int32): bool =
@@ -24,6 +26,23 @@ proc createTemporaryFolder() =
     if not existsDir(ROOT_FOLDER): createDir(ROOT_FOLDER)
     if not existsDir(ROOT_FOLDER & current): createDir(ROOT_FOLDER & current)
     discard execCmd("explorer \"" & ROOT_FOLDER & current & "\"")
+    echo "explorer \"" & ROOT_FOLDER & current & "\""
+
+# Check for outdated folders by their names
+proc checkOutdatedFolders() =
+    var current = epochTime().int
+    for entry in walkDir(ROOT_FOLDER):
+        if entry.kind == pcDir:
+            let folderName = $splitFile(entry.path).name;
+            if match(folderName, re"^\d+$"):
+                try:
+                    let folder = parseInt($splitFile(entry.path).name)
+                    if current > folder + DELETION_TIME:
+                        removeDir($entry.path)
+                except:
+                    echo "Unable to parse folder integer: " & $entry.path
+                    echo $splitFile(entry.path).name
+            
 
 # Main process
 proc detectWinT() =
@@ -43,6 +62,9 @@ proc detectWinT() =
         
         # Waiting time
         sleep(1000)
+
+    # Checking for outdated folders to delete
+    checkOutdatedFolders()
 
     # The interval of checking, to prevent high CPU usage
     sleep(50)
